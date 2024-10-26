@@ -38,7 +38,7 @@ def read_users(
     return users
 
 
-@app.get("/", response_model=list[EventPublic])
+@app.get("/events/", response_model=list[EventPublic])
 def read_events(
     session: SessionDep,
     offset: int = 0,
@@ -48,7 +48,7 @@ def read_events(
     return events
 
 
-@app.post("/event/", response_model=EventPublic)
+@app.post("events/", response_model=EventPublic)
 def create_event(event: EventCreate, session: SessionDep):
     db_event = Event.model_validate(event)
     session.add(db_event)
