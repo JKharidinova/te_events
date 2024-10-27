@@ -48,3 +48,8 @@ class EventPublic(EventBase):
 
 class EventCreate(EventBase):
     pass
+
+
+class M2Mrelation(SQLModel):
+    event_id: int
+    user_id: int

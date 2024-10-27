@@ -3,11 +3,20 @@ from typing import Annotated
 
 from fastapi import Query
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from sqlmodel import select
 
 from core.db import create_db_and_tables, SessionDep
-from core.models import User, UserCreate, UserPublic, Event, EventCreate, EventPublic
+from core.models import (
+    User,
+    UserCreate,
+    UserPublic,
+    Event,
+    EventCreate,
+    EventPublic,
+    M2Mrelation
+)
 
 
 @asynccontextmanager
@@ -15,8 +24,19 @@ async def lifespan(app: FastAPI):
     create_db_and_tables()
     yield
 
+origins = [
+    "http://localhost:3000",
+    "http://localhost",
+]
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.post("/users/", response_model=UserPublic)
@@ -48,7 +68,7 @@ def read_events(
     return events
 
 
-@app.post("events/", response_model=EventPublic)
+@app.post("/events/", response_model=EventPublic)
 def create_event(event: EventCreate, session: SessionDep):
     db_event = Event.model_validate(event)
     session.add(db_event)
@@ -58,9 +78,9 @@ def create_event(event: EventCreate, session: SessionDep):
 
 
 @app.post("/event/join/", response_model=EventPublic)
-def join_event(event_id: int, user_id: int, session: SessionDep):
-    event = session.get(Event, event_id)
-    user = session.get(User, user_id)
+def join_event(params: M2Mrelation, session: SessionDep):
+    event = session.get(Event, params.event_id)
+    user = session.get(User, params.user_id)
     event.joiners.append(user)
     session.add(event)
     session.commit()
@@ -68,10 +88,19 @@ def join_event(event_id: int, user_id: int, session: SessionDep):
 
 
 @app.post("/event/quit/", response_model=EventPublic)
-def quit_event(event_id: int, user_id: int, session: SessionDep):
-    event = session.get(Event, event_id)
-    user = session.get(User, user_id)
+def quit_event(params: M2Mrelation, session: SessionDep):
+    event = session.get(Event, params.event_id)
+    user = session.get(User, params.user_id)
     user.events.remove(event)
     session.add(event)
     session.commit()
     return event
+
+
+@app.delete("/event/cancel/{event_id}", response_model=dict)
+def cancel_event(event_id: int, session: SessionDep):
+    event = session.get(Event, event_id)
+    session.delete(event)
+    session.commit()
+
+    return {"detail": f"Event with ID {event_id} has been deleted"}
