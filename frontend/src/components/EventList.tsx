@@ -26,17 +26,56 @@ const EventList: React.FC = () => {
     users = JSON.parse(users)
   }
 
-  const getEvents = async () => {
-    try {
-      const data = await fetchEvents();
-      setEvents(data);
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
-
   useEffect(() => {
+    const ws = new WebSocket('ws://localhost:8000/ws');
+
+    ws.onopen = () => console.log("WebSocket connection opened");
+    ws.onerror = (error) => console.error("WebSocket error:", error);
+
+    ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      let { data, action } = message;
+      console.log(message)
+      console.log(data)
+
+      setEvents((prevEvents) => {
+        switch (action) {
+          case "create":
+            return prevEvents.some(event => event.id === data.id)
+              ? prevEvents
+              : [...prevEvents, data];
+          case "update":
+            return prevEvents.map(event =>
+                event.id === data.id ? { ...event, ...data } : event
+            );
+          case "delete":
+            return prevEvents.filter(event => event.id !== data.event_id);
+          default:
+            return prevEvents;
+        }
+      });
+    };
+
+    const getEvents = async () => {
+      try {
+        const data = await fetchEvents();
+        setEvents(data);
+      } catch (err: any) {
+        setError(err.message);
+      }
+    };
     getEvents();
+
+    const intervalId = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send("ping");
+      }
+    }, 10000);
+
+    return () => {
+      clearInterval(intervalId);
+      ws.close();
+    }
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,7 +106,6 @@ const EventList: React.FC = () => {
       })
       setFormErrors({});
       await createEvent(formData)
-      await getEvents()
     }
   }
 
@@ -97,16 +135,13 @@ const EventList: React.FC = () => {
   const onJoin = async (event_id: number) => {
     // @ts-ignore: Object is possibly 'null'.
     await joinEvent(event_id, activeUser.id)
-    await getEvents()
   }
   const onQuit = async (event_id: number) => {
     // @ts-ignore: Object is possibly 'null'.
     await quitEvent(event_id, activeUser.id)
-    await getEvents()
   }
   const onCancel = async (event_id: number) => {
     await cancelEvent(event_id)
-    await getEvents()
   }
   const visibleQuit = (joiners: User[]) => {
     if (activeUser && typeof activeUser === 'object') {
